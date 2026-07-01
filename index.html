@@ -2,19 +2,21 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>iProx 完全再現シミュレーター</title>
+    <title>iProx 完全再現シミュレーター (1マルチカラーLED版)</title>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; display: flex; gap: 20px; }
-        .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .code-area { flex: 1; min-width: 500px; }
-        .hardware-area { width: 340px; display: flex; flex-direction: column; gap: 15px; position: sticky; top: 20px; height: fit-content; }
+        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; display: flex; gap: 20px; margin: 0; box-sizing: border-box; }
+        .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); box-sizing: border-box; }
+        .code-area { flex: 1; min-width: 550px; }
+        .hardware-area { width: 360px; display: flex; flex-direction: column; gap: 15px; position: sticky; top: 20px; height: fit-content; }
         h2 { margin-top: 0; color: #333; font-size: 18px; border-bottom: 2px solid #ddd; padding-bottom: 5px; }
-        .row-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; counter-reset: line; }
-        .row { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 4px; background: #fafafa; border: 1px solid #eaeaea; }
-        .row::before { counter-increment: line; content: "行" counter(line) ":"; font-weight: bold; color: #666; width: 40px; text-align: right; }
+        .row-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; counter-reset: line; max-height: 60vh; overflow-y: auto; padding-right: 5px; }
+        .row { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 4px; background: #fafafa; border: 1px solid #eaeaea; flex-wrap: nowrap; }
+        .row::before { counter-increment: line; content: "行" counter(line) ":"; font-weight: bold; color: #666; width: 40px; text-align: right; flex-shrink: 0; }
         .row.current-exec { background: #fff3cd; border-color: #ffeba0; box-shadow: 0 0 5px rgba(255,193,7,0.3); }
-        select, input { padding: 4px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
-        .btn { padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        select, input { padding: 4px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .cmd-select { width: 120px; flex-shrink: 0; }
+        .args-span { display: flex; align-items: center; gap: 5px; flex-grow: 1; }
+        .btn { padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; flex-shrink: 0; }
         .btn:hover { background: #0056b3; }
         .btn-add { background: #28a745; margin-bottom: 15px; }
         .btn-add:hover { background: #218838; }
@@ -22,11 +24,11 @@
         .btn-danger:hover { background: #c82333; }
         .btn-stop { background: #6c757d; }
         .btn-stop:hover { background: #5a6268; }
-        .led { width: 45px; height: 45px; border-radius: 50%; background: #ddd; border: 2px solid #aaa; transition: all 0.1s; }
-        .led.active-1 { background: #007bff; box-shadow: 0 0 15px #007bff; border-color: #80bdff; }
-        .led.active-2 { background: #28a745; box-shadow: 0 0 15px #28a745; border-color: #72d58a; }
-        .led.active-3 { background: #dc3545; box-shadow: 0 0 15px #dc3545; border-color: #f5c6cb; }
-        .led.active-4 { background: #ffffff; box-shadow: 0 0 15px #ffffff; border-color: #ffc107; }
+        
+        /* 1つのマルチカラーLEDランプの見た目 */
+        .led-container { display: flex; justify-content: center; background: #222; padding: 30px; border-radius: 8px; text-align: center; }
+        .single-led { width: 100px; height: 100px; border-radius: 50%; background: #444; border: 4px solid #666; transition: background 0.05s, box-shadow 0.05s; }
+        
         .sensor-btn { padding: 12px; border: 1px solid #ccc; background: #e9ecef; cursor: pointer; user-select: none; text-align: center; border-radius: 4px; font-weight: bold; }
         .sensor-btn.on { background: #ffc107; color: #212529; border-color: #e0a800; }
         #speaker-status { font-weight: bold; color: #666; padding: 4px 8px; border-radius: 4px; background: #eee; display: inline-block; }
@@ -51,12 +53,12 @@
     </div>
 
     <div class="panel hardware-area">
-        <h2>出力パーツ (OP)</h2>
-        <div style="display: flex; gap: 10px; justify-content: space-around; background: #333; padding: 15px; border-radius: 6px;">
-            <div><div id="led-1" class="led"></div><center style="color:white;font-size:12px;margin-top:5px;">1:青</center></div>
-            <div><div id="led-2" class="led"></div><center style="color:white;font-size:12px;margin-top:5px;">2:緑</center></div>
-            <div><div id="led-3" class="led"></div><center style="color:white;font-size:12px;margin-top:5px;">3:赤</center></div>
-            <div><div id="led-4" class="led"></div><center style="color:white;font-size:12px;margin-top:5px;">4:白</center></div>
+        <h2>出力パーツ (OP 1〜4複合LED)</h2>
+        <div class="led-container">
+            <div>
+                <div id="main-led" class="single-led"></div>
+                <div style="color:#aaa; font-size:12px; margin-top:8px; font-weight:bold;" id="color-name">消灯</div>
+            </div>
         </div>
         <div>
             <strong>5: スピーカー状態:</strong> <span id="speaker-status">OFF</span>
@@ -81,7 +83,6 @@
         const container = document.getElementById('row-container');
         let rowCount = 0;
 
-        // 行を追加する関数
         function addRow(initialData = null) {
             if (container.children.length >= 30) {
                 alert("最大30行までです。");
@@ -126,17 +127,17 @@
             let html = '';
 
             if (cmd === 'OP') {
-                html = `<select class="p1"><option value="1">1:青LED</option><option value="2">2:緑LED</option><option value="3">3:赤LED</option><option value="4">4:白LED</option><option value="5">5:スピーカー</option></select>
-                        秒数:<input type="number" class="p2" style="width:55px;" value="0.2" step="0.1" min="0">`;
+                html = `<select class="p1" style="width:110px;"><option value="1">1:青LED</option><option value="2">2:緑LED</option><option value="3">3:赤LED</option><option value="4">4:白LED</option><option value="5">5:スピーカー</option></select>
+                        秒:<input type="number" class="p2" style="width:50px;" value="0.2" step="0.1" min="0">`;
             } else if (cmd === 'STP') {
-                html = `秒数:<input type="number" class="p1" style="width:55px;" value="0.1" step="0.1" min="0">`;
+                html = `秒:<input type="number" class="p1" style="width:50px;" value="0.1" step="0.1" min="0">`;
             } else if (cmd === 'IF') {
-                html = `<select class="p1"><option value="1">1IP (タッチ)</option><option value="2">2IP (明るさ)</option><option value="3">3IP (音量)</option></select>
-                        が <select class="p2"><option value="ON">ON</option><option value="OFF">OFF</option></select> なら 
-                        TH:<input type="number" class="p3" style="width:45px;" value="1" min="1" max="30"> 
-                        EL:<input type="number" class="p4" style="width:45px;" value="1" min="1" max="30">`;
+                html = `<select class="p1" style="width:90px;"><option value="1">1IP</option><option value="2">2IP</option><option value="3">3IP</option></select>
+                        が<select class="p2" style="width:60px;"><option value="ON">ON</option><option value="OFF">OFF</option></select>なら
+                        TH:<input type="number" class="p3" style="width:40px;" value="1">
+                        EL:<input type="number" class="p4" style="width:40px;" value="1">`;
             } else if (cmd === 'GTO') {
-                html = `行へ:<input type="number" class="p1" style="width:45px;" value="1" min="1" max="30">`;
+                html = `行へ:<input type="number" class="p1" style="width:40px;" value="1">`;
             }
 
             argsSpan.innerHTML = html;
@@ -149,7 +150,6 @@
             }
         }
 
-        // 物理入力センサー状態
         let ips = { 1: false, 2: false, 3: false };
         function setIp(num, state) {
             ips[num] = state;
@@ -164,12 +164,46 @@
             btn.classList.toggle('on', ips[num]);
         }
 
-        // 物理出力状態
+        // 物理出力状態 (1:青, 2:緑, 3:赤, 4:白, 5:音)
         let opStates = { 1: false, 2: false, 3: false, 4: false, 5: false };
+        
         function updateHardwareDisplay() {
-            for(let i=1; i<=4; i++) {
-                document.getElementById(`led-${i}`).className = 'led' + (opStates[i] ? ` active-${i}` : '');
+            const led = document.getElementById('main-led');
+            const txt = document.getElementById('color-name');
+            
+            // 各色のON状態をビットでチェックして色を決定する
+            let b = opStates[1];
+            let g = opStates[2];
+            let r = opStates[3];
+            let w = opStates[4];
+
+            let color = "#444";
+            let shadow = "none";
+            let name = "消灯";
+
+            if (w) {
+                // 白ONなら、本家機材の特性を考えて最優先で白
+                color = "#ffffff"; shadow = "0 0 25px #ffffff"; name = "白 (WHITE)";
+            } else if (b && g && r) {
+                color = "#ffffff"; shadow = "0 0 25px #ffffff"; name = "3色複合 (白っぽく発色)";
+            } else if (b && g) {
+                color = "#00ffff"; shadow = "0 0 25px #00ffff"; name = "青＋緑 ➔ 水色 (CYAN)";
+            } else if (g && r) {
+                color = "#ffff00"; shadow = "0 0 25px #ffff00"; name = "緑＋赤 ➔ 黄色 (YELLOW)";
+            } else if (b && r) {
+                color = "#ff00ff"; shadow = "0 0 25px #ff00ff"; name = "青＋赤 ➔ 紫色 (MAGENTA)";
+            } else if (b) {
+                color = "#007bff"; shadow = "0 0 25px #007bff"; name = "青 (BLUE)";
+            } else if (g) {
+                color = "#28a745"; shadow = "0 0 25px #28a745"; name = "緑 (GREEN)";
+            } else if (r) {
+                color = "#dc3545"; shadow = "0 0 25px #dc3545"; name = "赤 (RED)";
             }
+
+            led.style.background = color;
+            led.style.boxShadow = shadow;
+            txt.innerHTML = name;
+
             const spk = document.getElementById('speaker-status');
             if(opStates[5]) {
                 spk.innerHTML = "🎵 ディズニー音楽再生中...";
@@ -180,8 +214,7 @@
             }
         }
 
-        // 実行コアエンジン
-        let currentIndex = 0; // 0-indexed internal pointer
+        let currentIndex = 0;
         let isRunning = false;
         let activeTimeout = null;
 
@@ -204,8 +237,6 @@
 
         function executeStep() {
             const rows = container.children;
-            
-            // 全ハイライトを一度消去
             for(let i=0; i<rows.length; i++) rows[i].classList.remove('current-exec');
 
             if (!isRunning || currentIndex < 0 || currentIndex >= rows.length) {
@@ -220,7 +251,7 @@
 
             if (!cmd) {
                 currentIndex++;
-                setTimeout(executeStep, 5); // 空行は高速スキップ
+                setTimeout(executeStep, 5);
                 return;
             }
 
@@ -250,7 +281,6 @@
 
             if (cmd === 'STP') {
                 const sec = parseFloat(currentRow.querySelector('.p1').value) || 0;
-                // STP命令：すべての出力を完全にリセット（本家仕様）
                 opStates = { 1: false, 2: false, 3: false, 4: false, 5: false };
                 updateHardwareDisplay();
                 currentIndex++;
@@ -263,18 +293,16 @@
                 const sec = parseFloat(currentRow.querySelector('.p2').value);
 
                 if (sec === 0) {
-                    // 【本家再現】無限出力(0秒)の場合：出力をONにして、"その瞬間"に次の行へ進む
                     opStates[opNum] = true;
                     updateHardwareDisplay();
                     currentIndex++;
                     setTimeout(executeStep, 5);
                 } else {
-                    // 【本家再現】タイマー出力の場合：出力をONにして、指定秒数分"この行で進行がホールド"される
                     opStates[opNum] = true;
                     updateHardwareDisplay();
                     currentIndex++;
                     activeTimeout = setTimeout(() => {
-                        opStates[opNum] = false; // 指定秒数経ったら自動で消灯
+                        opStates[opNum] = false;
                         updateHardwareDisplay();
                         executeStep();
                     }, sec * 1000);
@@ -283,7 +311,6 @@
             }
         }
 
-        // 先ほどの30行の完成コードをロードする機能
         function loadSample() {
             stopProgram();
             container.innerHTML = '';
@@ -299,7 +326,6 @@
             sampleCode.forEach(item => addRow(item));
         }
 
-        // 初期状態で空の行を1行だけ出しておく
         addRow();
     </script>
 </body>
