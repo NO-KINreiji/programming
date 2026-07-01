@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>iProx プログラミングシミュレーター</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; display: flex; gap: 20px; }
+        .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .code-area { flex: 1; }
+        .hardware-area { width: 320px; display: flex; flex-direction: column; gap: 15px; }
+        h2 { margin-top: 0; color: #333; font-size: 18px; border-bottom: 2px solid #ddd; padding-bottom: 5px; }
+        .row { display: flex; align-items: center; margin-bottom: 5px; gap: 5px; }
+        .line-num { width: 30px; font-weight: bold; color: #666; }
+        select, input { padding: 4px; font-size: 14px; }
+        .btn { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn:hover { background: #0056b3; }
+        .btn-stop { background: #dc3545; }
+        .btn-stop:hover { background: #bd2130; }
+        .led { width: 40px; height: 40px; border-radius: 50%; background: #ddd; display: inline-block; border: 2px solid #aaa; }
+        .led.active-1 { background: #007bff; box-shadow: 0 0 15px #007bff; }
+        .led.active-2 { background: #28a745; box-shadow: 0 0 15px #28a745; }
+        .led.active-3 { background: #dc3545; box-shadow: 0 0 15px #dc3545; }
+        .led.active-4 { background: #ffffff; box-shadow: 0 0 15px #ffffff; border-color: #ffc107; }
+        .sensor-btn { padding: 10px; border: 1px solid #ccc; background: #e9ecef; cursor: pointer; user-select: none; text-align: center; border-radius: 4px; }
+        .sensor-btn.on { background: #ffc107; font-weight: bold; }
+        #speaker-status { font-weight: bold; color: #666; }
+        #speaker-status.playing { color: #fd7e14; animation: flash 0.5s infinite alternate; }
+        @keyframes flash { from { opacity: 0.5; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div class="panel code-area">
+        <h2>プログラム入力 (最大30行)</h2>
+        <div id="code-rows"></div>
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+            <button class="btn" onclick="runProgram()">▶ 実行</button>
+            <button class="btn btn-stop" onclick="stopProgram()">■ 停止</button>
+        </div>
+    </div>
+
+    <div class="panel hardware-area">
+        <h2>出力 (OP)</h2>
+        <div style="display: flex; gap: 10px; justify-content: space-around;">
+            <div><div id="led-1" class="led"></div><center>1:青</center></div>
+            <div><div id="led-2" class="led"></div><center>2:緑</center></div>
+            <div><div id="led-3" class="led"></div><center>3:赤</center></div>
+            <div><div id="led-4" class="led"></div><center>4:白</center></div>
+        </div>
+        <div style="margin-top: 10px;">
+            <strong>5: スピーカー状態:</strong> <span id="speaker-status">OFF</span>
+        </div>
+
+        <h2>入力センサー (IP)</h2>
+        <div>
+            <label>1: タップ感知センサー (IP1)</label>
+            <div id="ip1-btn" class="sensor-btn" mousedown="setIp(1, true)" mouseup="setIp(1, false)" onclick="toggleIp(1)">OFF (クリックでON/OFF)</div>
+        </div>
+        <div>
+            <label>2: 明るさセンサー (IP2)</label>
+            <div id="ip2-btn" class="sensor-btn" onclick="toggleIp(2)">明るい (OFF)</div>
+        </div>
+        <div>
+            <label>3: 音の大きさセンサー (IP3)</label>
+            <div id="ip3-btn" class="sensor-btn" onclick="toggleIp(3)">静か (OFF)</div>
+        </div>
+    </div>
+
+    <script>
+        // 30行分の入力欄を自動生成
+        const rowsContainer = document.getElementById('code-rows');
+        for (let i = 1; i <= 30; i++) {
+            const lineStr = String(i).padStart(2, '0');
+            rowsContainer.innerHTML += `
+                <div class="row">
+                    <span class="line-num">${lineStr}:</span>
+                    <select id="cmd-${i}" onchange="updateRow(${i})">
+                        <option value="">(空欄)</option>
+                        <option value="OP">OP (出力)</option>
+                        <option value="STP">STP (停止)</option>
+                        <option value="IF">IF (条件分岐)</option>
+                        <option value="GTO">GTO (ジャンプ)</option>
+                        <option value="END">END (終了)</option>
+                    </select>
+                    <span id="args-${i}"></span>
+                </div>
+            `;
+        }
+
+        // コマンドの選択に応じて右側の入力欄を切り替える
+        function updateRow(line) {
+            const cmd = document.getElementById(`cmd-${line}`).value;
+            const argsSpan = document.getElementById(`args-${line}`);
+            let html = '';
+            if (cmd === 'OP') {
+                html = `<select id="p1-${line}"><option value="1">1:青LED</option><option value="2">2:緑LED</option><option value="3">3:赤LED</option><option value="4">4:白LED</option><option value="5">5:スピーカー</option></select>
+                        秒数:<input type="number" id="p2-${line}" style="width:50px;" value="0.2" step="0.1" min="0">`;
+            } else if (cmd === 'STP') {
+                html = `秒数:<input type="number" id="p1-${line}" style="width:50px;" value="0.1" step="0.1" min="0">`;
+            } else if (cmd === 'IF') {
+                html = `<select id="p1-${line}"><option value="1">1IP (タッチ)</option><option value="2">2IP (明るさ)</option><option value="3">3IP (音量)</option></select>
+                        が <select id="p2-${line}"><option value="ON">ON</option><option value="OFF">OFF</option></select> なら 
+                        TH:<input type="number" id="p3-${line}" style="width:40px;" value="${line+1}"> 
+                        EL:<input type="number" id="p4-${line}" style="width:40px;" value="${line+1}">`;
+            } else if (cmd === 'GTO') {
+                html = `行へ:<input type="number" id="p1-${line}" style="width:40px;" value="1">`;
+            }
+            argsSpan.innerHTML = html;
+        }
+
+        // 先ほどの30行のプログラムを初期値としてセット
+        const sampleCode = [
+            {c:'OP', p1:'1', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'3'}, {c:'OP', p1:'1', p2:'0'}, {c:'OP', p1:'2', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'6'},
+            {c:'STP', p1:'0.1'}, {c:'OP', p1:'2', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'9'}, {c:'OP', p1:'2', p2:'0'}, {c:'OP', p1:'3', p2:'0.2'},
+            {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'12'}, {c:'STP', p1:'0.1'}, {c:'OP', p1:'3', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'15'}, {c:'OP', p1:'3', p2:'0'},
+            {c:'OP', p1:'1', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'18'}, {c:'STP', p1:'0.1'}, {c:'OP', p1:'4', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'26', p4:'21'},
+            {c:'GTO', p1:'1'}, {c:'GTO', p1:'23'}, {c:'OP', p1:'3', p2:'0.5'}, {c:'STP', p1:'0.5'}, {c:'IF', p1:'2', p2:'ON', p3:'29', p4:'23'},
+            {c:'OP', p1:'4', p2:'0'}, {c:'OP', p1:'5', p2:'0'}, {c:'IF', p1:'2', p2:'ON', p3:'29', p4:'28'}, {c:'STP', p1:'1'}, {c:'END'}
+        ];
+        
+        for(let i=0; i<sampleCode.length; i++) {
+            const s = sampleCode[i];
+            document.getElementById(`cmd-${i+1}`).value = s.c;
+            updateRow(i+1);
+            if(s.p1) document.getElementById(`p1-${i+1}`).value = s.p1;
+            if(s.p2) document.getElementById(`p2-${i+1}`).value = s.p2;
+            if(s.p3) document.getElementById(`p3-${i+1}`).value = s.p3;
+            if(s.p4) document.getElementById(`p4-${i+1}`).value = s.p4;
+        }
+
+        // センサーの状態管理
+        let ips = { 1: false, 2: false, 3: false };
+        function toggleIp(num) {
+            ips[num] = !ips[num];
+            const btn = document.getElementById(`ip${num}-btn`);
+            if(num === 1) btn.innerHTML = ips[num] ? "ON" : "OFF (クリックでON/OFF)";
+            if(num === 2) btn.innerHTML = ips[num] ? "暗い (ON)" : "明るい (OFF)";
+            if(num === 3) btn.innerHTML = ips[num] ? "うるさい (ON)" : "静か (OFF)";
+            btn.classList.toggle('on', ips[num]);
+        }
+
+        // ハードウェアの表示更新
+        let opStates = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        function updateHardwareDisplay() {
+            for(let i=1; i<=4; i++) {
+                const led = document.getElementById(`led-${i}`);
+                led.className = 'led' + (opStates[i] > 0 ? ` active-${i}` : '');
+            }
+            const spk = document.getElementById('speaker-status');
+            if(opStates[5] > 0) {
+                spk.innerHTML = "🎵 ディズニー音楽演奏中...";
+                spk.className = "playing";
+            } else {
+                spk.innerHTML = "OFF";
+                spk.className = "";
+            }
+        }
+
+        // シミュレーター実行エンジン
+        let PC = 1; // プログラムカウンタ
+        let isRunning = false;
+        let timerId = null;
+
+        function stopProgram() {
+            isRunning = false;
+            clearTimeout(timerId);
+            opStates = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            updateHardwareDisplay();
+            // 行のハイライト消去
+            for(let i=1; i<=30; i++) document.getElementById(`cmd-${i}`).parentElement.style.background = "";
+        }
+
+        function runProgram() {
+            stopProgram();
+            PC = 1;
+            isRunning = true;
+            executeStep();
+        }
+
+        function executeStep() {
+            if(!isRunning || PC < 1 || PC > 30) { stopProgram(); return; }
+
+            // ハイライト処理
+            for(let i=1; i<=30; i++) document.getElementById(`cmd-${i}`).parentElement.style.background = (i === PC) ? "#fff3cd" : "";
+
+            const cmd = document.getElementById(`cmd-${PC}`).value;
+            let delay = 0;
+
+            if (!cmd) { PC++; executeStep(); return; }
+
+            if (cmd === 'END') { stopProgram(); return; }
+
+            if (cmd === 'GTO') {
+                PC = parseInt(document.getElementById(`p1-${PC}`).value) || 1;
+                setTimeout(executeStep, 10);
+                return;
+            }
+
+            if (cmd === 'IF') {
+                const ipNum = document.getElementById(`p1-${PC}`).value;
+                const cond = document.getElementById(`p2-${PC}`).value;
+                const th = parseInt(document.getElementById(`p3-${PC}`).value) || (PC+1);
+                const el = parseInt(document.getElementById(`p4-${PC}`).value) || (PC+1);
+                const isTargetOn = ips[ipNum];
+                if ((cond === 'ON' && isTargetOn) || (cond === 'OFF' && !isTargetOn)) {
+                    PC = th;
+                } else {
+                    PC = el;
+                }
+                setTimeout(executeStep, 10);
+                return;
+            }
+
+            if (cmd === 'STP') {
+                const sec = parseFloat(document.getElementById(`p1-${PC}`).value) || 0;
+                opStates = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }; // 全消灯
+                updateHardwareDisplay();
+                PC++;
+                timerId = setTimeout(executeStep, sec * 1000);
+                return;
+            }
+
+            if (cmd === 'OP') {
+                const opNum = document.getElementById(`p1-${PC}`).value;
+                const sec = parseFloat(document.getElementById(`p2-${PC}`).value);
+                
+                if (sec === 0) {
+                    opStates[opNum] = 999; // 無限
+                    updateHardwareDisplay();
+                    PC++;
+                    setTimeout(executeStep, 10);
+                } else {
+                    opStates[opNum] = 1; // 点灯
+                    updateHardwareDisplay();
+                    PC++;
+                    timerId = setTimeout(() => {
+                        opStates[opNum] = 0; // タイマー終了で消灯
+                        updateHardwareDisplay();
+                        executeStep();
+                    }, sec * 1000);
+                }
+                return;
+            }
+        }
+    </script>
+</body>
+</html>
