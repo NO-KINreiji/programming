@@ -2,153 +2,177 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>iProx プログラミングシミュレーター</title>
+    <title>iProx 完全再現シミュレーター</title>
     <style>
         body { font-family: sans-serif; background: #f0f2f5; padding: 20px; display: flex; gap: 20px; }
         .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .code-area { flex: 1; }
-        .hardware-area { width: 320px; display: flex; flex-direction: column; gap: 15px; }
+        .code-area { flex: 1; min-width: 500px; }
+        .hardware-area { width: 340px; display: flex; flex-direction: column; gap: 15px; position: sticky; top: 20px; height: fit-content; }
         h2 { margin-top: 0; color: #333; font-size: 18px; border-bottom: 2px solid #ddd; padding-bottom: 5px; }
-        .row { display: flex; align-items: center; margin-bottom: 5px; gap: 5px; }
-        .line-num { width: 30px; font-weight: bold; color: #666; }
-        select, input { padding: 4px; font-size: 14px; }
-        .btn { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .row-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; counter-reset: line; }
+        .row { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 4px; background: #fafafa; border: 1px solid #eaeaea; }
+        .row::before { counter-increment: line; content: "行" counter(line) ":"; font-weight: bold; color: #666; width: 40px; text-align: right; }
+        .row.current-exec { background: #fff3cd; border-color: #ffeba0; box-shadow: 0 0 5px rgba(255,193,7,0.3); }
+        select, input { padding: 4px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+        .btn { padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
         .btn:hover { background: #0056b3; }
-        .btn-stop { background: #dc3545; }
-        .btn-stop:hover { background: #bd2130; }
-        .led { width: 40px; height: 40px; border-radius: 50%; background: #ddd; display: inline-block; border: 2px solid #aaa; }
-        .led.active-1 { background: #007bff; box-shadow: 0 0 15px #007bff; }
-        .led.active-2 { background: #28a745; box-shadow: 0 0 15px #28a745; }
-        .led.active-3 { background: #dc3545; box-shadow: 0 0 15px #dc3545; }
+        .btn-add { background: #28a745; margin-bottom: 15px; }
+        .btn-add:hover { background: #218838; }
+        .btn-danger { background: #dc3545; padding: 4px 8px; font-size: 12px; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-stop { background: #6c757d; }
+        .btn-stop:hover { background: #5a6268; }
+        .led { width: 45px; height: 45px; border-radius: 50%; background: #ddd; border: 2px solid #aaa; transition: all 0.1s; }
+        .led.active-1 { background: #007bff; box-shadow: 0 0 15px #007bff; border-color: #80bdff; }
+        .led.active-2 { background: #28a745; box-shadow: 0 0 15px #28a745; border-color: #72d58a; }
+        .led.active-3 { background: #dc3545; box-shadow: 0 0 15px #dc3545; border-color: #f5c6cb; }
         .led.active-4 { background: #ffffff; box-shadow: 0 0 15px #ffffff; border-color: #ffc107; }
-        .sensor-btn { padding: 10px; border: 1px solid #ccc; background: #e9ecef; cursor: pointer; user-select: none; text-align: center; border-radius: 4px; }
-        .sensor-btn.on { background: #ffc107; font-weight: bold; }
-        #speaker-status { font-weight: bold; color: #666; }
-        #speaker-status.playing { color: #fd7e14; animation: flash 0.5s infinite alternate; }
-        @keyframes flash { from { opacity: 0.5; } to { opacity: 1; } }
+        .sensor-btn { padding: 12px; border: 1px solid #ccc; background: #e9ecef; cursor: pointer; user-select: none; text-align: center; border-radius: 4px; font-weight: bold; }
+        .sensor-btn.on { background: #ffc107; color: #212529; border-color: #e0a800; }
+        #speaker-status { font-weight: bold; color: #666; padding: 4px 8px; border-radius: 4px; background: #eee; display: inline-block; }
+        #speaker-status.playing { color: #fff; background: #fd7e14; animation: pulse 0.5s infinite alternate; }
+        @keyframes pulse { from { opacity: 0.8; } to { opacity: 1; } }
     </style>
 </head>
 <body>
 
     <div class="panel code-area">
-        <h2>プログラム入力 (最大30行)</h2>
-        <div id="code-rows"></div>
-        <div style="margin-top: 15px; display: flex; gap: 10px;">
-            <button class="btn" onclick="runProgram()">▶ 実行</button>
+        <h2>プログラム構築 (最大30行)</h2>
+        <div id="row-container" class="row-list">
+            </div>
+        
+        <button class="btn btn-add" onclick="addRow()">＋ 行を追加</button>
+        
+        <div style="border-top: 2px solid #ddd; padding-top: 15px; display: flex; gap: 10px;">
+            <button class="btn" onclick="runProgram()">▶ 実行 (最初から)</button>
             <button class="btn btn-stop" onclick="stopProgram()">■ 停止</button>
+            <button class="btn btn-stop" style="background:#17a2b8" onclick="loadSample()">🔄 サンプルコード読込</button>
         </div>
     </div>
 
     <div class="panel hardware-area">
-        <h2>出力 (OP)</h2>
-        <div style="display: flex; gap: 10px; justify-content: space-around;">
-            <div><div id="led-1" class="led"></div><center>1:青</center></div>
-            <div><div id="led-2" class="led"></div><center>2:緑</center></div>
-            <div><div id="led-3" class="led"></div><center>3:赤</center></div>
-            <div><div id="led-4" class="led"></div><center>4:白</center></div>
+        <h2>出力パーツ (OP)</h2>
+        <div style="display: flex; gap: 10px; justify-content: space-around; background: #333; padding: 15px; border-radius: 6px;">
+            <div><div id="led-1" class="led"></div><center style="color:white;font-size:12px;margin-top:5px;">1:青</center></div>
+            <div><div id="led-2" class="led"></div><center style="color:white;font-size:12px;margin-top:5px;">2:緑</center></div>
+            <div><div id="led-3" class="led"></div><center style="color:white;font-size:12px;margin-top:5px;">3:赤</center></div>
+            <div><div id="led-4" class="led"></div><center style="color:white;font-size:12px;margin-top:5px;">4:白</center></div>
         </div>
-        <div style="margin-top: 10px;">
+        <div>
             <strong>5: スピーカー状態:</strong> <span id="speaker-status">OFF</span>
         </div>
 
         <h2>入力センサー (IP)</h2>
         <div>
-            <label>1: タップ感知センサー (IP1)</label>
-            <div id="ip1-btn" class="sensor-btn" mousedown="setIp(1, true)" mouseup="setIp(1, false)" onclick="toggleIp(1)">OFF (クリックでON/OFF)</div>
+            <label style="font-size:13px; font-weight:bold; color:#555;">1: タップ感知センサー (IP1)</label>
+            <div id="ip1-btn" class="sensor-btn" onmousedown="setIp(1, true)" onmouseup="setIp(1, false)" onmouseleave="setIp(1, false)">長押し中だけ ON</div>
         </div>
         <div>
-            <label>2: 明るさセンサー (IP2)</label>
+            <label style="font-size:13px; font-weight:bold; color:#555;">2: 明るさセンサー (IP2)</label>
             <div id="ip2-btn" class="sensor-btn" onclick="toggleIp(2)">明るい (OFF)</div>
         </div>
         <div>
-            <label>3: 音の大きさセンサー (IP3)</label>
+            <label style="font-size:13px; font-weight:bold; color:#555;">3: 音の大きさセンサー (IP3)</label>
             <div id="ip3-btn" class="sensor-btn" onclick="toggleIp(3)">静か (OFF)</div>
         </div>
     </div>
 
     <script>
-        // 30行分の入力欄を自動生成
-        const rowsContainer = document.getElementById('code-rows');
-        for (let i = 1; i <= 30; i++) {
-            const lineStr = String(i).padStart(2, '0');
-            rowsContainer.innerHTML += `
-                <div class="row">
-                    <span class="line-num">${lineStr}:</span>
-                    <select id="cmd-${i}" onchange="updateRow(${i})">
-                        <option value="">(空欄)</option>
-                        <option value="OP">OP (出力)</option>
-                        <option value="STP">STP (停止)</option>
-                        <option value="IF">IF (条件分岐)</option>
-                        <option value="GTO">GTO (ジャンプ)</option>
-                        <option value="END">END (終了)</option>
-                    </select>
-                    <span id="args-${i}"></span>
-                </div>
-            `;
-        }
+        const container = document.getElementById('row-container');
+        let rowCount = 0;
 
-        // コマンドの選択に応じて右側の入力欄を切り替える
-        function updateRow(line) {
-            const cmd = document.getElementById(`cmd-${line}`).value;
-            const argsSpan = document.getElementById(`args-${line}`);
-            let html = '';
-            if (cmd === 'OP') {
-                html = `<select id="p1-${line}"><option value="1">1:青LED</option><option value="2">2:緑LED</option><option value="3">3:赤LED</option><option value="4">4:白LED</option><option value="5">5:スピーカー</option></select>
-                        秒数:<input type="number" id="p2-${line}" style="width:50px;" value="0.2" step="0.1" min="0">`;
-            } else if (cmd === 'STP') {
-                html = `秒数:<input type="number" id="p1-${line}" style="width:50px;" value="0.1" step="0.1" min="0">`;
-            } else if (cmd === 'IF') {
-                html = `<select id="p1-${line}"><option value="1">1IP (タッチ)</option><option value="2">2IP (明るさ)</option><option value="3">3IP (音量)</option></select>
-                        が <select id="p2-${line}"><option value="ON">ON</option><option value="OFF">OFF</option></select> なら 
-                        TH:<input type="number" id="p3-${line}" style="width:40px;" value="${line+1}"> 
-                        EL:<input type="number" id="p4-${line}" style="width:40px;" value="${line+1}">`;
-            } else if (cmd === 'GTO') {
-                html = `行へ:<input type="number" id="p1-${line}" style="width:40px;" value="1">`;
+        // 行を追加する関数
+        function addRow(initialData = null) {
+            if (container.children.length >= 30) {
+                alert("最大30行までです。");
+                return;
             }
+            rowCount++;
+            const rowId = `row-item-${rowCount}`;
+            const div = document.createElement('div');
+            div.id = rowId;
+            div.className = 'row';
+            
+            div.innerHTML = `
+                <select class="cmd-select" onchange="onCmdChange('${rowId}')">
+                    <option value="">(空欄)</option>
+                    <option value="OP">OP (出力)</option>
+                    <option value="STP">STP (停止)</option>
+                    <option value="IF">IF (条件分岐)</option>
+                    <option value="GTO">GTO (ジャンプ)</option>
+                    <option value="END">END (終了)</option>
+                </select>
+                <span class="args-span"></span>
+                <button class="btn btn-danger" onclick="deleteRow('${rowId}')" style="margin-left:auto;">削除</button>
+            `;
+            container.appendChild(div);
+
+            if (initialData) {
+                const select = div.querySelector('.cmd-select');
+                select.value = initialData.c;
+                onCmdChange(rowId, initialData);
+            }
+        }
+
+        function deleteRow(rowId) {
+            const el = document.getElementById(rowId);
+            if(el) el.remove();
+        }
+
+        function onCmdChange(rowId, data = null) {
+            const row = document.getElementById(rowId);
+            const cmd = row.querySelector('.cmd-select').value;
+            const argsSpan = row.querySelector('.args-span');
+            let html = '';
+
+            if (cmd === 'OP') {
+                html = `<select class="p1"><option value="1">1:青LED</option><option value="2">2:緑LED</option><option value="3">3:赤LED</option><option value="4">4:白LED</option><option value="5">5:スピーカー</option></select>
+                        秒数:<input type="number" class="p2" style="width:55px;" value="0.2" step="0.1" min="0">`;
+            } else if (cmd === 'STP') {
+                html = `秒数:<input type="number" class="p1" style="width:55px;" value="0.1" step="0.1" min="0">`;
+            } else if (cmd === 'IF') {
+                html = `<select class="p1"><option value="1">1IP (タッチ)</option><option value="2">2IP (明るさ)</option><option value="3">3IP (音量)</option></select>
+                        が <select class="p2"><option value="ON">ON</option><option value="OFF">OFF</option></select> なら 
+                        TH:<input type="number" class="p3" style="width:45px;" value="1" min="1" max="30"> 
+                        EL:<input type="number" class="p4" style="width:45px;" value="1" min="1" max="30">`;
+            } else if (cmd === 'GTO') {
+                html = `行へ:<input type="number" class="p1" style="width:45px;" value="1" min="1" max="30">`;
+            }
+
             argsSpan.innerHTML = html;
+
+            if (data) {
+                if(data.p1) row.querySelector('.p1').value = data.p1;
+                if(data.p2) row.querySelector('.p2').value = data.p2;
+                if(data.p3) row.querySelector('.p3').value = data.p3;
+                if(data.p4) row.querySelector('.p4').value = data.p4;
+            }
         }
 
-        // 先ほどの30行のプログラムを初期値としてセット
-        const sampleCode = [
-            {c:'OP', p1:'1', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'3'}, {c:'OP', p1:'1', p2:'0'}, {c:'OP', p1:'2', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'6'},
-            {c:'STP', p1:'0.1'}, {c:'OP', p1:'2', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'9'}, {c:'OP', p1:'2', p2:'0'}, {c:'OP', p1:'3', p2:'0.2'},
-            {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'12'}, {c:'STP', p1:'0.1'}, {c:'OP', p1:'3', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'15'}, {c:'OP', p1:'3', p2:'0'},
-            {c:'OP', p1:'1', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'18'}, {c:'STP', p1:'0.1'}, {c:'OP', p1:'4', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'26', p4:'21'},
-            {c:'GTO', p1:'1'}, {c:'GTO', p1:'23'}, {c:'OP', p1:'3', p2:'0.5'}, {c:'STP', p1:'0.5'}, {c:'IF', p1:'2', p2:'ON', p3:'29', p4:'23'},
-            {c:'OP', p1:'4', p2:'0'}, {c:'OP', p1:'5', p2:'0'}, {c:'IF', p1:'2', p2:'ON', p3:'29', p4:'28'}, {c:'STP', p1:'1'}, {c:'END'}
-        ];
-        
-        for(let i=0; i<sampleCode.length; i++) {
-            const s = sampleCode[i];
-            document.getElementById(`cmd-${i+1}`).value = s.c;
-            updateRow(i+1);
-            if(s.p1) document.getElementById(`p1-${i+1}`).value = s.p1;
-            if(s.p2) document.getElementById(`p2-${i+1}`).value = s.p2;
-            if(s.p3) document.getElementById(`p3-${i+1}`).value = s.p3;
-            if(s.p4) document.getElementById(`p4-${i+1}`).value = s.p4;
-        }
-
-        // センサーの状態管理
+        // 物理入力センサー状態
         let ips = { 1: false, 2: false, 3: false };
+        function setIp(num, state) {
+            ips[num] = state;
+            const btn = document.getElementById(`ip${num}-btn`);
+            btn.classList.toggle('on', state);
+        }
         function toggleIp(num) {
             ips[num] = !ips[num];
             const btn = document.getElementById(`ip${num}-btn`);
-            if(num === 1) btn.innerHTML = ips[num] ? "ON" : "OFF (クリックでON/OFF)";
             if(num === 2) btn.innerHTML = ips[num] ? "暗い (ON)" : "明るい (OFF)";
             if(num === 3) btn.innerHTML = ips[num] ? "うるさい (ON)" : "静か (OFF)";
             btn.classList.toggle('on', ips[num]);
         }
 
-        // ハードウェアの表示更新
-        let opStates = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        // 物理出力状態
+        let opStates = { 1: false, 2: false, 3: false, 4: false, 5: false };
         function updateHardwareDisplay() {
             for(let i=1; i<=4; i++) {
-                const led = document.getElementById(`led-${i}`);
-                led.className = 'led' + (opStates[i] > 0 ? ` active-${i}` : '');
+                document.getElementById(`led-${i}`).className = 'led' + (opStates[i] ? ` active-${i}` : '');
             }
             const spk = document.getElementById('speaker-status');
-            if(opStates[5] > 0) {
-                spk.innerHTML = "🎵 ディズニー音楽演奏中...";
+            if(opStates[5]) {
+                spk.innerHTML = "🎵 ディズニー音楽再生中...";
                 spk.className = "playing";
             } else {
                 spk.innerHTML = "OFF";
@@ -156,85 +180,101 @@
             }
         }
 
-        // シミュレーター実行エンジン
-        let PC = 1; // プログラムカウンタ
+        // 実行コアエンジン
+        let currentIndex = 0; // 0-indexed internal pointer
         let isRunning = false;
-        let timerId = null;
+        let activeTimeout = null;
 
         function stopProgram() {
             isRunning = false;
-            clearTimeout(timerId);
-            opStates = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            clearTimeout(activeTimeout);
+            opStates = { 1: false, 2: false, 3: false, 4: false, 5: false };
             updateHardwareDisplay();
-            // 行のハイライト消去
-            for(let i=1; i<=30; i++) document.getElementById(`cmd-${i}`).parentElement.style.background = "";
+            const rows = container.children;
+            for(let i=0; i<rows.length; i++) rows[i].classList.remove('current-exec');
         }
 
         function runProgram() {
             stopProgram();
-            PC = 1;
+            if (container.children.length === 0) return;
+            currentIndex = 0;
             isRunning = true;
             executeStep();
         }
 
         function executeStep() {
-            if(!isRunning || PC < 1 || PC > 30) { stopProgram(); return; }
+            const rows = container.children;
+            
+            // 全ハイライトを一度消去
+            for(let i=0; i<rows.length; i++) rows[i].classList.remove('current-exec');
 
-            // ハイライト処理
-            for(let i=1; i<=30; i++) document.getElementById(`cmd-${i}`).parentElement.style.background = (i === PC) ? "#fff3cd" : "";
+            if (!isRunning || currentIndex < 0 || currentIndex >= rows.length) {
+                stopProgram();
+                return;
+            }
 
-            const cmd = document.getElementById(`cmd-${PC}`).value;
-            let delay = 0;
+            const currentRow = rows[currentIndex];
+            currentRow.classList.add('current-exec');
 
-            if (!cmd) { PC++; executeStep(); return; }
+            const cmd = currentRow.querySelector('.cmd-select').value;
 
-            if (cmd === 'END') { stopProgram(); return; }
+            if (!cmd) {
+                currentIndex++;
+                setTimeout(executeStep, 5); // 空行は高速スキップ
+                return;
+            }
+
+            if (cmd === 'END') {
+                stopProgram();
+                return;
+            }
 
             if (cmd === 'GTO') {
-                PC = parseInt(document.getElementById(`p1-${PC}`).value) || 1;
-                setTimeout(executeStep, 10);
+                const targetLine = parseInt(currentRow.querySelector('.p1').value) || 1;
+                currentIndex = targetLine - 1;
+                setTimeout(executeStep, 5);
                 return;
             }
 
             if (cmd === 'IF') {
-                const ipNum = document.getElementById(`p1-${PC}`).value;
-                const cond = document.getElementById(`p2-${PC}`).value;
-                const th = parseInt(document.getElementById(`p3-${PC}`).value) || (PC+1);
-                const el = parseInt(document.getElementById(`p4-${PC}`).value) || (PC+1);
-                const isTargetOn = ips[ipNum];
-                if ((cond === 'ON' && isTargetOn) || (cond === 'OFF' && !isTargetOn)) {
-                    PC = th;
-                } else {
-                    PC = el;
-                }
-                setTimeout(executeStep, 10);
+                const ipNum = currentRow.querySelector('.p1').value;
+                const cond = currentRow.querySelector('.p2').value;
+                const th = parseInt(currentRow.querySelector('.p3').value) || 1;
+                const el = parseInt(currentRow.querySelector('.p4').value) || 1;
+                
+                const isTrue = (cond === 'ON' && ips[ipNum]) || (cond === 'OFF' && !ips[ipNum]);
+                currentIndex = (isTrue ? th : el) - 1;
+                setTimeout(executeStep, 5);
                 return;
             }
 
             if (cmd === 'STP') {
-                const sec = parseFloat(document.getElementById(`p1-${PC}`).value) || 0;
-                opStates = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }; // 全消灯
+                const sec = parseFloat(currentRow.querySelector('.p1').value) || 0;
+                // STP命令：すべての出力を完全にリセット（本家仕様）
+                opStates = { 1: false, 2: false, 3: false, 4: false, 5: false };
                 updateHardwareDisplay();
-                PC++;
-                timerId = setTimeout(executeStep, sec * 1000);
+                currentIndex++;
+                activeTimeout = setTimeout(executeStep, sec * 1000);
                 return;
             }
 
             if (cmd === 'OP') {
-                const opNum = document.getElementById(`p1-${PC}`).value;
-                const sec = parseFloat(document.getElementById(`p2-${PC}`).value);
-                
+                const opNum = currentRow.querySelector('.p1').value;
+                const sec = parseFloat(currentRow.querySelector('.p2').value);
+
                 if (sec === 0) {
-                    opStates[opNum] = 999; // 無限
+                    // 【本家再現】無限出力(0秒)の場合：出力をONにして、"その瞬間"に次の行へ進む
+                    opStates[opNum] = true;
                     updateHardwareDisplay();
-                    PC++;
-                    setTimeout(executeStep, 10);
+                    currentIndex++;
+                    setTimeout(executeStep, 5);
                 } else {
-                    opStates[opNum] = 1; // 点灯
+                    // 【本家再現】タイマー出力の場合：出力をONにして、指定秒数分"この行で進行がホールド"される
+                    opStates[opNum] = true;
                     updateHardwareDisplay();
-                    PC++;
-                    timerId = setTimeout(() => {
-                        opStates[opNum] = 0; // タイマー終了で消灯
+                    currentIndex++;
+                    activeTimeout = setTimeout(() => {
+                        opStates[opNum] = false; // 指定秒数経ったら自動で消灯
                         updateHardwareDisplay();
                         executeStep();
                     }, sec * 1000);
@@ -242,6 +282,25 @@
                 return;
             }
         }
+
+        // 先ほどの30行の完成コードをロードする機能
+        function loadSample() {
+            stopProgram();
+            container.innerHTML = '';
+            rowCount = 0;
+            const sampleCode = [
+                {c:'OP', p1:'1', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'3'}, {c:'OP', p1:'1', p2:'0'}, {c:'OP', p1:'2', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'6'},
+                {c:'STP', p1:'0.1'}, {c:'OP', p1:'2', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'9'}, {c:'OP', p1:'2', p2:'0'}, {c:'OP', p1:'3', p2:'0.2'},
+                {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'12'}, {c:'STP', p1:'0.1'}, {c:'OP', p1:'3', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'15'}, {c:'OP', p1:'3', p2:'0'},
+                {c:'OP', p1:'1', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'23', p4:'18'}, {c:'STP', p1:'0.1'}, {c:'OP', p1:'4', p2:'0.2'}, {c:'IF', p1:'1', p2:'ON', p3:'26', p4:'21'},
+                {c:'GTO', p1:'1'}, {c:'GTO', p1:'23'}, {c:'OP', p1:'3', p2:'0.5'}, {c:'STP', p1:'0.5'}, {c:'IF', p1:'2', p2:'ON', p3:'29', p4:'23'},
+                {c:'OP', p1:'4', p2:'0'}, {c:'OP', p1:'5', p2:'0'}, {c:'IF', p1:'2', p2:'ON', p3:'29', p4:'28'}, {c:'STP', p1:'1'}, {c:'END'}
+            ];
+            sampleCode.forEach(item => addRow(item));
+        }
+
+        // 初期状態で空の行を1行だけ出しておく
+        addRow();
     </script>
 </body>
 </html>
